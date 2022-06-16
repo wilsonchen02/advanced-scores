@@ -10,8 +10,8 @@
 # 4. Compute weighted score of title based on advanced scores from site
 # 5. Mutate entry score in the server
 
-# import tkinter as tk
-# import tkinter.ttk as ttk
+import tkinter as tk
+import tkinter.ttk as ttk
 import json
 import requests
 import webbrowser
@@ -33,7 +33,6 @@ def rounder(num, sigfig):
   return round(num, sigfig-int(floor(log10(abs(num))))-1)
 
 # User Authentication
-
 client_id = '8459'
 client_secret = 'QvOHYXJT3J5sq88cdOMXPEI1uGKQj01ARoQ780tc'
 redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
@@ -54,9 +53,42 @@ data = client.prepare_request_body(
 
 webbrowser.open(authorization_url)
 # Read in received token from user manually
-token = input("Insert token: ")
+# token = input("Insert token: ")
 
 graphql_url = 'https://graphql.anilist.co'
+
+# User input GUI
+root = tk.Tk()
+root.title("Anilist Advanced Scores")
+# Center the window
+window_width = 1000
+window_height = 800
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+center_x = int(screen_width / 2 - window_width / 2)
+center_y = int(screen_height / 2 - window_height / 2)
+root.geometry(f"{window_width}x{window_height}+{center_x}+{center_y}")
+root.resizable(False, False)
+root.iconbitmap("./images/amogus.ico")
+
+# UI
+key_label = ttk.Label(root, text="Enter key: ")
+key_label.grid(column=0, row=0)
+access_key = tk.StringVar()
+input_box = ttk.Entry(root, textvariable=access_key)
+input_box.grid(column=1, row=0)
+input_box.focus()
+
+def key_entered():
+    global token
+    token = access_key.get()
+
+
+key_button = ttk.Button(root, text="OK", command=key_entered)
+key_button.grid(column=1, row=1)
+
+# Start the GUI event loop
+root.mainloop()
 
 # -- VARIABLES --
 # List holding the names of the scoring categories
@@ -184,69 +216,10 @@ args_str += ''') {
 # Avengers assemble the full request
 query = args_str + data_str + '''
 }'''
-# print(variables)
-# print(query)
 
-# # Alternate between mediaID and score
-# variables = {
-#   "temp_id1": 131681,
-#   "temp_score1": 9.56,
-#   "temp_id2": 21519,
-#   "temp_score2": 8.9
-# }
-
-# query = '''
-# mutation(
-#   $temp_id1: Int, 
-#   $temp_score1: Float,
-#   $temp_id2: Int,
-#   $temp_score2: Float
-# ) {
-#   data1: SaveMediaListEntry(mediaId: $temp_id1, score: $temp_score1) {
-#     score
-#   }
-#   data2: SaveMediaListEntry(mediaId: $temp_id2, score: $temp_score2) {
-#     score
-#   }
-# }
-# '''
 # Header is used to make authenticated requests
 header = {
     'Authorization': f'Bearer ' + str(token)
 }
 response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
 print(response.status_code)
-
-# # User input GUI
-# root = tk.Tk()
-# root.title("Anilist Advanced Scores")
-# # Center the window
-# window_width = 1000
-# window_height = 800
-# screen_width = root.winfo_screenwidth()
-# screen_height = root.winfo_screenheight()
-# center_x = int(screen_width / 2 - window_width / 2)
-# center_y = int(screen_height / 2 - window_height / 2)
-# root.geometry(f"{window_width}x{window_height}+{center_x}+{center_y}")
-# root.resizable(False, False)
-# root.iconbitmap("./images/amogus.ico")
-
-# # UI
-
-# # Ask user for inputs
-
-# # Button to onfirm user inputs for scoring weights
-# # and perform calculations
-# def weights_button_clicked():
-#     # TODO
-#     print("fard")
-
-# weights_button = ttk.Button(root, text="Done", command=weights_button_clicked)
-# weights_button.pack(
-#     ipadx = 10,
-#     ipady = 10,
-#     expand = True
-# )
-
-# # Start the GUI event loop
-# root.mainloop()
