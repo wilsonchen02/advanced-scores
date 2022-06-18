@@ -12,12 +12,22 @@
 
 import tkinter as tk
 import tkinter.ttk as ttk
+from tkinter import messagebox as m_box
 import json
 import requests
 import webbrowser
 import math
 from oauthlib.oauth2 import WebApplicationClient
 from math import log10, floor
+
+# -- VARIABLES --
+# List holding the names of the scoring categories
+category_names = []
+# List holding the user assigned weights of the scoring categories
+category_weights = []
+# Authenticated user's name
+auth_username = ""
+status_code = 0
 
 print("This program assumes that the user has advanced scores enabled on Anilist\n"
       "and also has put in scores for said advanced scores. It will only update\n"
@@ -58,62 +68,61 @@ webbrowser.open(authorization_url)
 graphql_url = 'https://graphql.anilist.co'
 
 # User input GUI
-root = tk.Tk()
-root.title("Anilist Advanced Scores")
-# Center the window
-window_width = 1000
-window_height = 800
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
-center_x = int(screen_width / 2 - window_width / 2)
-center_y = int(screen_height / 2 - window_height / 2)
-root.geometry(f"{window_width}x{window_height}+{center_x}+{center_y}")
-root.resizable(False, False)
-root.iconbitmap("./images/amogus.ico")
+login_window = tk.Tk()
 
-# UI
-key_label = ttk.Label(root, text="Enter key: ")
-key_label.grid(column=0, row=0)
-access_key = tk.StringVar()
-input_box = ttk.Entry(root, textvariable=access_key)
-input_box.grid(column=1, row=0)
+# Frame
+token_frame = ttk.LabelFrame(login_window, text = "Access Token")
+token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
+
+token_label = ttk.Label(token_frame, text = "Enter token: ")
+token_label.grid(row = 0, column = 0)
+access_token = tk.StringVar()
+input_box = ttk.Entry(token_frame, textvariable=access_token)
+input_box.grid(row=0, column=1)
 input_box.focus()
 
-def key_entered():
-    global token
-    token = access_key.get()
+# Attempt login button
+def login_ok_btn():
+  global token
+  token = access_token.get()
+  try:
+    # Obtain user's Username
+    query = '''
+    query {
+      Viewer {
+        name
+      }
+    }
+    '''
+    # Header is used to make authenticated requests
+    header = {
+        'Authorization': f'Bearer ' + str(token)
+    }
+    response = requests.post(graphql_url, json={'query': query}, headers=header)
+    status_code = response.status_code
+    global response_parsable
+    response_parsable = response.json()
+    auth_username = response_parsable["data"]["Viewer"]["name"]
+    print("User: " + auth_username)
+    login_window.destroy()
+  except:
+    m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
 
 
-key_button = ttk.Button(root, text="OK", command=key_entered)
-key_button.grid(column=1, row=1)
+token_button = ttk.Button(login_window, 
+                          text = "OK",
+                          command = login_ok_btn)
+token_button.grid(column=1, row=1, padx = 5, pady = 5)
 
-# Start the GUI event loop
-root.mainloop()
-
-# -- VARIABLES --
-# List holding the names of the scoring categories
-category_names = []
-# List holding the user assigned weights of the scoring categories
-category_weights = []
-# Authenticated user's name
-auth_username = ""
-
-# Obtain user's Username
-query = '''
-query {
-  Viewer {
-    name
-  }
-}
-'''
-# Header is used to make authenticated requests
-header = {
-    'Authorization': f'Bearer ' + str(token)
-}
-response = requests.post(graphql_url, json={'query': query}, headers=header)
-response_parsable = response.json()
-auth_username = response_parsable["data"]["Viewer"]["name"]
-print("User: " + auth_username)
+# Run login GUI
+login_window.title("Anilist Advanced Scores")
+login_window.iconbitmap("./images/amogus.ico")
+win_width = login_window.winfo_reqwidth()
+win_height = login_window.winfo_reqheight()
+horiz_center = int(login_window.winfo_screenwidth()/2 - win_width/2)
+vert_center = int(login_window.winfo_screenheight()/2 - win_height/2)
+login_window.geometry("+{}+{}".format(horiz_center, vert_center))
+login_window.mainloop()
 
 # Query to obtain names of advanced scoring sections and advanced
 # scores of media (assuming the user's advanced scores are on)
@@ -138,6 +147,8 @@ query($username: String) {
   }
 }
 '''
+print(auth_username)
+print(type(auth_username))
 variables = {
   "username": auth_username
 }
@@ -149,77 +160,77 @@ response_parsable = response.json()
 category_names = response_parsable["data"]["User"]["mediaListOptions"] \
                                   ["animeList"]["advancedScoring"]
 
-while True:
-  print("Please insert the weight of each scoring section, with the total weight = 1")
-  i = 0
-  while i < len(category_names):
-    temp = float(input(category_names[i] + ': '))
-    # Error checking
-    if temp < 0 or temp > 1:
-      print("Invalid weight. Must be greater than 0 and less than\n"
-            "or equal to 1")
-      continue
-    category_weights.append(temp)
-    i += 1
+# while True:
+#   print("Please insert the weight of each scoring section, with the total weight = 1")
+#   i = 0
+#   while i < len(category_names):
+#     temp = float(input(category_names[i] + ': '))
+#     # Error checking
+#     if temp < 0 or temp > 1:
+#       print("Invalid weight. Must be greater than 0 and less than\n"
+#             "or equal to 1")
+#       continue
+#     category_weights.append(temp)
+#     i += 1
   
-  temp_sum_weights = sum(category_weights)
-  if temp_sum_weights == 1.0:
-    break
-  else:
-    # Error checking
-    print("\nTotal weight is not equal to 1\n"
-          "Your total weight: " + str(temp_sum_weights) + "\n")
-    category_weights = []
+#   temp_sum_weights = sum(category_weights)
+#   if temp_sum_weights == 1.0:
+#     break
+#   else:
+#     # Error checking
+#     print("\nTotal weight is not equal to 1\n"
+#           "Your total weight: " + str(temp_sum_weights) + "\n")
+#     category_weights = []
 
-# TODO: Parse through media query and do the math (round to nearest hundredth)
-# Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
-# Prep strings for concatenation for final mutation request
-args_str = '''mutation('''
-data_str = ""
-variables = {}
-entry_counter = 0
-for x in response_parsable["data"]["MediaListCollection"]["lists"]:
-  # Loop through each media entry in each media watch status list ["entries"]
-  status_category = x["entries"]
-  for y in status_category:
-    temp_adv_score_list = []
-    weighted_score = 0
-    # Only get entries already scored by the user
-    if(y["score"] != 0):
-      temp_adv_score_list = list(y["advancedScores"].values())
-      # Calculate weighted score
-      for j in range(len(category_names)):
-        weighted_score += temp_adv_score_list[j] * category_weights[j]
-      weighted_score = rounder(weighted_score, 2)
+# # TODO: Parse through media query and do the math (round to nearest hundredth)
+# # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
+# # Prep strings for concatenation for final mutation request
+# args_str = '''mutation('''
+# data_str = ""
+# variables = {}
+# entry_counter = 0
+# for x in response_parsable["data"]["MediaListCollection"]["lists"]:
+#   # Loop through each media entry in each media watch status list ["entries"]
+#   status_category = x["entries"]
+#   for y in status_category:
+#     temp_adv_score_list = []
+#     weighted_score = 0
+#     # Only get entries already scored by the user
+#     if(y["score"] != 0):
+#       temp_adv_score_list = list(y["advancedScores"].values())
+#       # Calculate weighted score
+#       for j in range(len(category_names)):
+#         weighted_score += temp_adv_score_list[j] * category_weights[j]
+#       weighted_score = rounder(weighted_score, 2)
 
-      entry_counter += 1
-      id_str = "id_" + str(entry_counter)
-      score_str = "score_" + str(entry_counter)
-      entry_str = "entry_" + str(entry_counter)
-      # Add mediaId and score to the mutation
-      variables[id_str] = y["mediaId"]
-      variables[score_str] = weighted_score
-      args_str += '''
-      ''' + "$" + id_str + ": Int,"
-      args_str += '''
-      ''' + "$" + score_str + ": Float,"
-      # Use aliases to add a new media entry to the request
-      data_str += '''
-      ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + ", score: $" + score_str \
-      + ") {score}"
+#       entry_counter += 1
+#       id_str = "id_" + str(entry_counter)
+#       score_str = "score_" + str(entry_counter)
+#       entry_str = "entry_" + str(entry_counter)
+#       # Add mediaId and score to the mutation
+#       variables[id_str] = y["mediaId"]
+#       variables[score_str] = weighted_score
+#       args_str += '''
+#       ''' + "$" + id_str + ": Int,"
+#       args_str += '''
+#       ''' + "$" + score_str + ": Float,"
+#       # Use aliases to add a new media entry to the request
+#       data_str += '''
+#       ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + ", score: $" + score_str \
+#       + ") {score}"
 
-# Add ") {" after args_str is done (and also remove extra comma)
-args_str = args_str[:-1]
-args_str += ''') {
-'''
+# # Add ") {" after args_str is done (and also remove extra comma)
+# args_str = args_str[:-1]
+# args_str += ''') {
+# '''
 
-# Avengers assemble the full request
-query = args_str + data_str + '''
-}'''
+# # Avengers assemble the full request
+# query = args_str + data_str + '''
+# }'''
 
-# Header is used to make authenticated requests
-header = {
-    'Authorization': f'Bearer ' + str(token)
-}
-response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
-print(response.status_code)
+# # Header is used to make authenticated requests
+# header = {
+#     'Authorization': f'Bearer ' + str(token)
+# }
+# response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
+# print(response.status_code)
