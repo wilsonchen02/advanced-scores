@@ -14,6 +14,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox as m_box
 import json
+from unicodedata import category
 import requests
 import webbrowser
 import math
@@ -25,13 +26,12 @@ from math import log10, floor
 category_names = []
 # List holding the user assigned weights of the scoring categories
 category_weights = []
+label_list = []
+entry_list = []
 # Authenticated user's name
 auth_username = ""
 status_code = 0
-
-print("This program assumes that the user has advanced scores enabled on Anilist\n"
-      "and also has put in scores for said advanced scores. It will only update\n"
-      "anime entries marked as COMPLETED, CURRENTLY WATCHING, and PAUSED.")
+global token
 
 # Create a formatted string of the Python JSON object
 def jprint(obj):
@@ -41,6 +41,13 @@ def jprint(obj):
 # Rounds number to specified sigfig
 def rounder(num, sigfig):
   return round(num, sigfig-int(floor(log10(abs(num))))-1)
+
+def center_window(window_name):
+  win_width = window_name.winfo_reqwidth()
+  win_height = window_name.winfo_reqheight()
+  horiz_center = int(window_name.winfo_screenwidth()/2 - win_width/2)
+  vert_center = int(window_name.winfo_screenheight()/2 - win_height/2)
+  window_name.geometry("+{}+{}".format(horiz_center, vert_center))
 
 # User Authentication
 client_id = '8459'
@@ -69,11 +76,14 @@ graphql_url = 'https://graphql.anilist.co'
 
 # User input GUI
 login_window = tk.Tk()
+login_window.title("Anilist Advanced Scores")
+login_window.iconbitmap("./assets/amogus.ico")
 
-# Frame
+# Center the window
+center_window(login_window)
+
 token_frame = ttk.LabelFrame(login_window, text = "Access Token")
 token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
-
 token_label = ttk.Label(token_frame, text = "Enter token: ")
 token_label.grid(row = 0, column = 0)
 access_token = tk.StringVar()
@@ -81,9 +91,14 @@ input_box = ttk.Entry(token_frame, textvariable=access_token)
 input_box.grid(row=0, column=1)
 input_box.focus()
 
+# Info about the app
+m_box.showinfo("Description", 
+      "This program assumes that the user has advanced scores enabled on Anilist "
+      "and also has put in scores for said advanced scores. It will only update "
+      "anime entries marked as COMPLETED, CURRENTLY WATCHING, and PAUSED.")
+
 # Attempt login button
 def login_ok_btn():
-  global token
   token = access_token.get()
   try:
     # Obtain user's Username
@@ -100,8 +115,8 @@ def login_ok_btn():
     }
     response = requests.post(graphql_url, json={'query': query}, headers=header)
     status_code = response.status_code
-    global response_parsable
     response_parsable = response.json()
+    global auth_username
     auth_username = response_parsable["data"]["Viewer"]["name"]
     print("User: " + auth_username)
     login_window.destroy()
@@ -115,13 +130,6 @@ token_button = ttk.Button(login_window,
 token_button.grid(column=1, row=1, padx = 5, pady = 5)
 
 # Run login GUI
-login_window.title("Anilist Advanced Scores")
-login_window.iconbitmap("./images/amogus.ico")
-win_width = login_window.winfo_reqwidth()
-win_height = login_window.winfo_reqheight()
-horiz_center = int(login_window.winfo_screenwidth()/2 - win_width/2)
-vert_center = int(login_window.winfo_screenheight()/2 - win_height/2)
-login_window.geometry("+{}+{}".format(horiz_center, vert_center))
 login_window.mainloop()
 
 # Query to obtain names of advanced scoring sections and advanced
@@ -147,8 +155,6 @@ query($username: String) {
   }
 }
 '''
-print(auth_username)
-print(type(auth_username))
 variables = {
   "username": auth_username
 }
@@ -159,6 +165,52 @@ response_parsable = response.json()
 # Parse names of scoring categories and store in list
 category_names = response_parsable["data"]["User"]["mediaListOptions"] \
                                   ["animeList"]["advancedScoring"]
+
+# Weights GUI
+category_window = tk.Tk()
+weights_description = ttk.Label(category_window, text = \
+  "Please insert the weight of each scoring section, with the total weight = 1")
+weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
+category_frame = ttk.LabelFrame(category_window, text = "Categories")
+category_frame.grid(row = 1, column = 0, padx = 10, pady = 10)
+
+# Submit weight values button
+def weights_ok_btn():
+  try:
+    # Add up the weights and see if = 1
+    # Error check: make sure values are between 0 and 1
+    temp_sum_weights = 0
+    for i in range(len(entry_list)):
+      temp = float(entry_list[i].get())
+      if temp < 0 or temp > 1:
+        m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
+      temp_sum_weights += temp
+    
+    # Error check: total weight must be 1
+    if temp_sum_weights != 1:
+      m_box.showerror("Error", f"Total weight must be equal to 1.")
+    
+    # TODO: OK button and the mutation
+  except:
+    m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
+
+# Make an entry for each category
+for i in range(len(category_names)):
+  new_label = ttk.Label(category_frame, text = category_names[i])
+  new_entry = ttk.Entry(category_frame)
+  new_label.grid(row = i, column = 0, padx = 5, pady = 5)
+  new_entry.grid(row = i, column = 1, padx = 5, pady = 5)
+
+  # Add to lists as references
+  label_list.append(new_label)
+  entry_list.append(new_entry)
+
+# Run weights GUI
+category_window.title("Anilist Advanced Scores")
+category_window.iconbitmap("./assets/amogus.ico")
+center_window(category_window)
+entry_list[0].focus()
+category_window.mainloop()
 
 # while True:
 #   print("Please insert the weight of each scoring section, with the total weight = 1")
@@ -182,7 +234,7 @@ category_names = response_parsable["data"]["User"]["mediaListOptions"] \
 #           "Your total weight: " + str(temp_sum_weights) + "\n")
 #     category_weights = []
 
-# # TODO: Parse through media query and do the math (round to nearest hundredth)
+# # Parse through media query and do the math (round to nearest hundredth)
 # # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
 # # Prep strings for concatenation for final mutation request
 # args_str = '''mutation('''
