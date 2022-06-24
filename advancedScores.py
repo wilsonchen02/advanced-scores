@@ -222,10 +222,10 @@ def weights_ok_btn():
             # Calculate weighted score
             for j in range(len(category_names)):
               weighted_score += temp_adv_score_list[j] * category_weights[j]
-              print(temp_adv_score_list[j])
-              print(str(category_weights[j]) + "\n")
+              # print(temp_adv_score_list[j])
+              # print(str(category_weights[j]) + "\n")
             weighted_score = rounder(weighted_score, 2)
-            print(str(weighted_score) + "\n")
+            # print(str(weighted_score) + "\n")
 
             entry_counter += 1
             id_str = "id_" + str(entry_counter)
@@ -293,78 +293,3 @@ weights_button = ttk.Button(weights_window,
 weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
 
 weights_window.mainloop()
-
-# while True:
-#   print("Please insert the weight of each scoring section, with the total weight = 1")
-#   i = 0
-#   while i < len(category_names):
-#     temp = float(input(category_names[i] + ': '))
-#     # Error checking
-#     if temp < 0 or temp > 1:
-#       print("Invalid weight. Must be greater than 0 and less than\n"
-#             "or equal to 1")
-#       continue
-#     category_weights.append(temp)
-#     i += 1
-  
-#   temp_sum_weights = sum(category_weights)
-#   if temp_sum_weights == 1.0:
-#     break
-#   else:
-#     # Error checking
-#     print("\nTotal weight is not equal to 1\n"
-#           "Your total weight: " + str(temp_sum_weights) + "\n")
-#     category_weights = []
-
-# # Parse through media query and do the math (round to nearest hundredth)
-# # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
-# # Prep strings for concatenation for final mutation request
-# args_str = '''mutation('''
-# data_str = ""
-# variables = {}
-# entry_counter = 0
-# for x in response_parsable["data"]["MediaListCollection"]["lists"]:
-#   # Loop through each media entry in each media watch status list ["entries"]
-#   status_category = x["entries"]
-#   for y in status_category:
-#     temp_adv_score_list = []
-#     weighted_score = 0
-#     # Only get entries already scored by the user
-#     if(y["score"] != 0):
-#       temp_adv_score_list = list(y["advancedScores"].values())
-#       # Calculate weighted score
-#       for j in range(len(category_names)):
-#         weighted_score += temp_adv_score_list[j] * category_weights[j]
-#       weighted_score = rounder(weighted_score, 2)
-
-#       entry_counter += 1
-#       id_str = "id_" + str(entry_counter)
-#       score_str = "score_" + str(entry_counter)
-#       entry_str = "entry_" + str(entry_counter)
-#       # Add mediaId and score to the mutation
-#       variables[id_str] = y["mediaId"]
-#       variables[score_str] = weighted_score
-#       args_str += '''
-#       ''' + "$" + id_str + ": Int,"
-#       args_str += '''
-#       ''' + "$" + score_str + ": Float,"
-#       # Use aliases to add a new media entry to the request
-#       data_str += '''
-#       ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + ", score: $" + score_str \
-#       + ") {score}"
-
-# # Add ") {" after args_str is done (and also remove extra comma)
-# args_str = args_str[:-1]
-# args_str += ''') {
-# '''
-
-# # Avengers assemble the full request
-# query = args_str + data_str + '''
-# }'''
-
-# # Header is used to make authenticated requests
-# header = {
-#     'Authorization': f'Bearer ' + str(token)
-# }
-# response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
-# print(response.status_code)
