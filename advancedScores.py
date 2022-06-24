@@ -182,6 +182,7 @@ def weights_ok_btn():
     # Add up the weights and see if = 1
     # Error check: make sure values are between 0 and 1
     temp_sum_weights = 0
+    category_weights = []
     for i in range(len(entry_list)):
       temp = entry_list[i].get()
       if len(temp) == 0:
@@ -192,8 +193,9 @@ def weights_ok_btn():
         m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
         return
       else:
-        temp_sum_weights += float(temp)
+        # temp_sum_weights += float(temp)
         category_weights.append(float(temp))
+    temp_sum_weights = sum(category_weights)
     
     if temp_sum_weights != 1:
       # Error check: total weight must be 1
@@ -220,7 +222,10 @@ def weights_ok_btn():
             # Calculate weighted score
             for j in range(len(category_names)):
               weighted_score += temp_adv_score_list[j] * category_weights[j]
+              print(temp_adv_score_list[j])
+              print(str(category_weights[j]) + "\n")
             weighted_score = rounder(weighted_score, 2)
+            print(str(weighted_score) + "\n")
 
             entry_counter += 1
             id_str = "id_" + str(entry_counter)
