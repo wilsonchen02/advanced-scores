@@ -30,7 +30,7 @@ label_list = []
 entry_list = []
 # Authenticated user's name
 auth_username = ""
-status_code = 0
+status_code = -1
 global token
 
 # Create a formatted string of the Python JSON object
@@ -99,6 +99,7 @@ m_box.showinfo("Description",
 
 # Attempt login button
 def login_ok_btn():
+  global token
   token = access_token.get()
   try:
     # Obtain user's Username
@@ -118,7 +119,6 @@ def login_ok_btn():
     response_parsable = response.json()
     global auth_username
     auth_username = response_parsable["data"]["Viewer"]["name"]
-    print("User: " + auth_username)
     login_window.destroy()
   except:
     m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
@@ -127,7 +127,7 @@ def login_ok_btn():
 token_button = ttk.Button(login_window, 
                           text = "OK",
                           command = login_ok_btn)
-token_button.grid(column=1, row=1, padx = 5, pady = 5)
+token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
 
 # Run login GUI
 login_window.mainloop()
@@ -167,12 +167,14 @@ category_names = response_parsable["data"]["User"]["mediaListOptions"] \
                                   ["animeList"]["advancedScoring"]
 
 # Weights GUI
-category_window = tk.Tk()
-weights_description = ttk.Label(category_window, text = \
+weights_window = tk.Tk()
+weights_description = ttk.Label(weights_window, text = \
   "Please insert the weight of each scoring section, with the total weight = 1")
 weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
-category_frame = ttk.LabelFrame(category_window, text = "Categories")
-category_frame.grid(row = 1, column = 0, padx = 10, pady = 10)
+username_label = ttk.Label(weights_window, text = f"User: {auth_username}")
+username_label.grid(row = 1, column = 0, padx = 10, pady = 0)
+category_frame = ttk.LabelFrame(weights_window, text = "Categories")
+category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
 
 # Submit weight values button
 def weights_ok_btn():
@@ -181,18 +183,87 @@ def weights_ok_btn():
     # Error check: make sure values are between 0 and 1
     temp_sum_weights = 0
     for i in range(len(entry_list)):
-      temp = float(entry_list[i].get())
-      if temp < 0 or temp > 1:
+      temp = entry_list[i].get()
+      if len(temp) == 0:
+        # Error check: entry not filled in
+        m_box.showerror("Error", f"Entry is missing a value.")
+        return
+      elif float(temp) < 0 or float(temp) > 1:
         m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
-      temp_sum_weights += temp
+        return
+      else:
+        temp_sum_weights += float(temp)
+        category_weights.append(float(temp))
     
-    # Error check: total weight must be 1
     if temp_sum_weights != 1:
-      m_box.showerror("Error", f"Total weight must be equal to 1.")
-    
-    # TODO: OK button and the mutation
+      # Error check: total weight must be 1
+      m_box.showerror("Error", f"Total weight must be equal to 1.\n"
+                                "Your total weight: " + str(temp_sum_weights))
+    else:
+      # TODO: OK button and the mutation
+      # Parse through media query and do the math (round to nearest hundredth)
+      # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
+      # Prep strings for concatenation for final mutation request
+      args_str = '''mutation('''
+      data_str = ""
+      variables = {}
+      entry_counter = 0
+      for x in response_parsable["data"]["MediaListCollection"]["lists"]:
+        # Loop through each media entry in each media watch status list ["entries"]
+        status_category = x["entries"]
+        for y in status_category:
+          temp_adv_score_list = []
+          weighted_score = 0
+          # Only get entries already scored by the user
+          if(y["score"] != 0):
+            temp_adv_score_list = list(y["advancedScores"].values())
+            # Calculate weighted score
+            for j in range(len(category_names)):
+              weighted_score += temp_adv_score_list[j] * category_weights[j]
+            weighted_score = rounder(weighted_score, 2)
+
+            entry_counter += 1
+            id_str = "id_" + str(entry_counter)
+            score_str = "score_" + str(entry_counter)
+            entry_str = "entry_" + str(entry_counter)
+            # Add mediaId and score to the mutation
+            variables[id_str] = y["mediaId"]
+            variables[score_str] = weighted_score
+            args_str += '''
+            ''' + "$" + id_str + ": Int,"
+            args_str += '''
+            ''' + "$" + score_str + ": Float,"
+            # Use aliases to add a new media entry to the request
+            data_str += '''
+            ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + ", score: $" + score_str \
+            + ") {score}"
+
+      # Add ") {" after args_str is done (and also remove extra comma)
+      args_str = args_str[:-1]
+      args_str += ''') {
+      '''
+
+      # Avengers assemble the full request
+      query = args_str + data_str + '''
+      }'''
+
+      # Header is used to make authenticated requests
+      header = {
+          'Authorization': f'Bearer ' + str(token)
+      }
+      response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
+      status_code = response.status_code
+
+      # Result alert
+      if int(status_code) == 200:
+        m_box.showinfo("Alert", "Success!")
+      else:
+        m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
+  except ValueError:
+    # Error check: entered value must be int or float
+    m_box.showerror("Error", f"Value must be numeric.")
   except:
-    m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
+    m_box.showerror("Error", f"Something went wrong.")
 
 # Make an entry for each category
 for i in range(len(category_names)):
@@ -206,11 +277,17 @@ for i in range(len(category_names)):
   entry_list.append(new_entry)
 
 # Run weights GUI
-category_window.title("Anilist Advanced Scores")
-category_window.iconbitmap("./assets/amogus.ico")
-center_window(category_window)
+weights_window.title("Anilist Advanced Scores")
+weights_window.iconbitmap("./assets/amogus.ico")
+center_window(weights_window)
 entry_list[0].focus()
-category_window.mainloop()
+
+weights_button = ttk.Button(weights_window,
+                            text = "OK",
+                            command = weights_ok_btn)
+weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
+
+weights_window.mainloop()
 
 # while True:
 #   print("Please insert the weight of each scoring section, with the total weight = 1")
