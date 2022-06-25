@@ -304,7 +304,7 @@ class WeightsManager():
     weighted_score = 0
     for j in range(len(self.category_weights)):
       weighted_score += advanced_scores[j] * self.category_weights[j]
-      weighted_score = round(weighted_score, 1)
+    weighted_score = round(weighted_score, 1)
     return weighted_score
 
   def is_entry_not_scored(self, entry):
