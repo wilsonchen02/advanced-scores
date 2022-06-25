@@ -24,10 +24,12 @@ from math import log10, floor
 # -- VARIABLES --
 # List holding the names of the scoring categories
 category_names = []
+
 # List holding the user assigned weights of the scoring categories
 category_weights = []
 label_list = []
 entry_list = []
+
 # Authenticated user's name
 auth_username = ""
 status_code = -1
@@ -42,6 +44,7 @@ def jprint(obj):
 def rounder(num, sigfig):
   return round(num, sigfig-int(floor(log10(abs(num))))-1)
 
+# Do the math to (kinda) place window at center of display
 def center_window(window_name):
   win_width = window_name.winfo_reqwidth()
   win_height = window_name.winfo_reqheight()
@@ -68,9 +71,8 @@ data = client.prepare_request_body(
   client_secret
 )
 
+# Redirect user to Anilist login on browser
 webbrowser.open(authorization_url)
-# Read in received token from user manually
-# token = input("Insert token: ")
 
 graphql_url = 'https://graphql.anilist.co'
 
@@ -84,9 +86,12 @@ center_window(login_window)
 
 token_frame = ttk.LabelFrame(login_window, text = "Access Token")
 token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
+
 token_label = ttk.Label(token_frame, text = "Enter token: ")
 token_label.grid(row = 0, column = 0)
+
 access_token = tk.StringVar()
+
 input_box = ttk.Entry(token_frame, textvariable=access_token)
 input_box.grid(row=0, column=1)
 input_box.focus()
@@ -114,9 +119,11 @@ def login_ok_btn():
     header = {
         'Authorization': f'Bearer ' + str(token)
     }
+
     response = requests.post(graphql_url, json={'query': query}, headers=header)
     status_code = response.status_code
     response_parsable = response.json()
+
     global auth_username
     auth_username = response_parsable["data"]["Viewer"]["name"]
     login_window.destroy()
@@ -131,6 +138,7 @@ token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
 
 # Run login GUI
 login_window.mainloop()
+
 
 # Query to obtain names of advanced scoring sections and advanced
 # scores of media (assuming the user's advanced scores are on)
@@ -168,21 +176,23 @@ category_names = response_parsable["data"]["User"]["mediaListOptions"] \
 
 # Weights GUI
 weights_window = tk.Tk()
+
 weights_description = ttk.Label(weights_window, text = \
   "Please insert the weight of each scoring section, with the total weight = 1")
 weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
+
 username_label = ttk.Label(weights_window, text = f"User: {auth_username}")
 username_label.grid(row = 1, column = 0, padx = 10, pady = 0)
+
 category_frame = ttk.LabelFrame(weights_window, text = "Categories")
 category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
 
 # Submit weight values button
 def weights_ok_btn():
-  try:
-    # Add up the weights and see if = 1
-    # Error check: make sure values are between 0 and 1
+  try:    
     temp_sum_weights = 0
     category_weights = []
+
     for i in range(len(entry_list)):
       temp = entry_list[i].get()
       if len(temp) == 0:
@@ -190,11 +200,13 @@ def weights_ok_btn():
         m_box.showerror("Error", f"Entry is missing a value.")
         return
       elif float(temp) < 0 or float(temp) > 1:
+        # Error check: make sure values are between 0 and 1
         m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
         return
       else:
         # temp_sum_weights += float(temp)
         category_weights.append(float(temp))
+    
     temp_sum_weights = sum(category_weights)
     
     if temp_sum_weights != 1:
@@ -202,7 +214,6 @@ def weights_ok_btn():
       m_box.showerror("Error", f"Total weight must be equal to 1.\n"
                                 "Your total weight: " + str(temp_sum_weights))
     else:
-      # TODO: OK button and the mutation
       # Parse through media query and do the math (round to nearest hundredth)
       # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
       # Prep strings for concatenation for final mutation request
@@ -210,38 +221,44 @@ def weights_ok_btn():
       data_str = ""
       variables = {}
       entry_counter = 0
+
       for x in response_parsable["data"]["MediaListCollection"]["lists"]:
         # Loop through each media entry in each media watch status list ["entries"]
         status_category = x["entries"]
+
         for y in status_category:
           temp_adv_score_list = []
           weighted_score = 0
+
           # Only get entries already scored by the user
           if(y["score"] != 0):
             temp_adv_score_list = list(y["advancedScores"].values())
+
             # Calculate weighted score
             for j in range(len(category_names)):
               weighted_score += temp_adv_score_list[j] * category_weights[j]
-              # print(temp_adv_score_list[j])
-              # print(str(category_weights[j]) + "\n")
             weighted_score = rounder(weighted_score, 2)
-            # print(str(weighted_score) + "\n")
 
+            # Variable names for the GraphQL query
             entry_counter += 1
             id_str = "id_" + str(entry_counter)
             score_str = "score_" + str(entry_counter)
             entry_str = "entry_" + str(entry_counter)
+
             # Add mediaId and score to the mutation
             variables[id_str] = y["mediaId"]
             variables[score_str] = weighted_score
+
+            # Add new variables as arguments of the query
             args_str += '''
             ''' + "$" + id_str + ": Int,"
             args_str += '''
             ''' + "$" + score_str + ": Float,"
+
             # Use aliases to add a new media entry to the request
             data_str += '''
-            ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + ", score: $" + score_str \
-            + ") {score}"
+            ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + \
+            ", score: $" + score_str + ") {score}"
 
       # Add ") {" after args_str is done (and also remove extra comma)
       args_str = args_str[:-1]
@@ -264,9 +281,12 @@ def weights_ok_btn():
         m_box.showinfo("Alert", "Success!")
       else:
         m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
+  
+  # Error check: entered value must be int or float
   except ValueError:
-    # Error check: entered value must be int or float
     m_box.showerror("Error", f"Value must be numeric.")
+  
+  # If all else fails...
   except:
     m_box.showerror("Error", f"Something went wrong.")
 
