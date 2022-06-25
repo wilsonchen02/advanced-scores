@@ -10,16 +10,15 @@
 # 4. Compute weighted score of title based on advanced scores from site
 # 5. Mutate entry score in the server
 
+import json
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter import messagebox as m_box
-import json
-from unicodedata import category
-import requests
 import webbrowser
-import math
+from math import floor, log10
+from tkinter import messagebox as m_box
+
+import requests
 from oauthlib.oauth2 import WebApplicationClient
-from math import log10, floor
 
 # -- VARIABLES --
 # List holding the names of the scoring categories
@@ -35,11 +34,6 @@ auth_username = ""
 status_code = -1
 global token
 
-# Create a formatted string of the Python JSON object
-def jprint(obj):
-  text = json.dumps(obj, indent=4)
-  print(text)
-
 # Rounds number to specified sigfig
 def rounder(num, sigfig):
   return round(num, sigfig-int(floor(log10(abs(num))))-1)
@@ -52,24 +46,27 @@ def center_window(window_name):
   vert_center = int(window_name.winfo_screenheight()/2 - win_height/2)
   window_name.geometry("+{}+{}".format(horiz_center, vert_center))
 
-# User Authentication
 client_id = '8459'
-client_secret = 'QvOHYXJT3J5sq88cdOMXPEI1uGKQj01ARoQ780tc'
-redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
-client = WebApplicationClient(client_id)
 authorization_url = 'https://anilist.co/api/v2/oauth/authorize?client_id=' \
                     + client_id + '&response_type=token'
+# User Authentication
+def connect_app_to_api():
+  client_secret = 'QvOHYXJT3J5sq88cdOMXPEI1uGKQj01ARoQ780tc'
+  redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
+  client = WebApplicationClient(client_id)
 
-url = client.prepare_request_uri(
-  authorization_url,
-  redirect_uri
-)
+  client.prepare_request_uri(
+    authorization_url,
+    redirect_uri
+  )
 
-data = client.prepare_request_body(
-  redirect_uri,
-  client_id,
-  client_secret
-)
+  client.prepare_request_body(
+    redirect_uri,
+    client_id,
+    client_secret
+  )
+
+connect_app_to_api()
 
 # Redirect user to Anilist login on browser
 webbrowser.open(authorization_url)
@@ -187,100 +184,107 @@ username_label.grid(row = 1, column = 0, padx = 10, pady = 0)
 category_frame = ttk.LabelFrame(weights_window, text = "Categories")
 category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
 
+def add_entries_to_category_weights(entry, entries):
+  new_entries = entries
+  if len(entry) == 0:
+    # Error check: entry not filled in
+    m_box.showerror("Error", f"Entry is missing a value.")
+    return new_entries
+  elif float(entry) < 0 or float(entry) > 1:
+    # Error check: make sure values are between 0 and 1
+    m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
+    return new_entries
+  else:
+    # sum_weights += float(temp)
+    new_entries.append(float(entry))
+  return new_entries
+
+def calculate_weighted_score(temp_adv_score_list, category_weights):
+  weighted_score = 0
+  for j in range(len(category_weights)):
+    weighted_score += temp_adv_score_list[j] * category_weights[j]
+    weighted_score = rounder(weighted_score, 2)
+  return weighted_score
+
 # Submit weight values button
 def weights_ok_btn():
   try:    
-    temp_sum_weights = 0
+    sum_weights = 0
     category_weights = []
 
     for i in range(len(entry_list)):
-      temp = entry_list[i].get()
-      if len(temp) == 0:
-        # Error check: entry not filled in
-        m_box.showerror("Error", f"Entry is missing a value.")
-        return
-      elif float(temp) < 0 or float(temp) > 1:
-        # Error check: make sure values are between 0 and 1
-        m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
-        return
-      else:
-        # temp_sum_weights += float(temp)
-        category_weights.append(float(temp))
+      category_weights = add_entries_to_category_weights(entry_list[i].get(), category_weights)
     
-    temp_sum_weights = sum(category_weights)
+    sum_weights = sum(category_weights)
     
-    if temp_sum_weights != 1:
+    if sum_weights != 1:
       # Error check: total weight must be 1
       m_box.showerror("Error", f"Total weight must be equal to 1.\n"
-                                "Your total weight: " + str(temp_sum_weights))
+                                "Your total weight: " + str(sum_weights))
+      return
+
+    # Parse through media query and do the math (round to nearest hundredth)
+    # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
+    # Prep strings for concatenation for final mutation request
+    args_str = '''mutation('''
+    data_str = ""
+    variables = {}
+    entry_counter = 0
+
+    for x in response_parsable["data"]["MediaListCollection"]["lists"]:
+      # Loop through each media entry in each media watch status list ["entries"]
+      status_category = x["entries"]
+
+      for y in status_category:
+        # Only get entries already scored by the user
+        if(y["score"] == 0):
+          continue
+
+        temp_adv_score_list = []
+
+        temp_adv_score_list = list(y["advancedScores"].values())
+
+        # Calculate weighted score
+        weighted_score = calculate_weighted_score(
+          temp_adv_score_list, category_weights)
+
+        # Variable names for the GraphQL query
+        entry_counter += 1
+        id_str = f"id_{entry_counter}"
+        score_str = f"score_{entry_counter}"
+        entry_str = f"entry_{entry_counter}"
+
+        # Add mediaId and score to the mutation
+        variables[id_str] = y["mediaId"]
+        variables[score_str] = weighted_score
+
+        # Add new variables as arguments of the query
+        args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
+
+        # Use aliases to add a new media entry to the request
+        data_str += '''
+        ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + \
+        ", score: $" + score_str + ") {score}"
+
+    # Add ") {" after args_str is done (and also remove extra comma)
+    args_str = args_str[:-1]
+    args_str += ") {\n"
+
+    # Avengers assemble the full request
+    query = args_str + data_str + "\n"
+
+    # Header is used to make authenticated requests
+    header = {
+        'Authorization': f'Bearer ' + str(token)
+    }
+    response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
+    status_code = response.status_code
+
+    # Result alert
+    if int(status_code) == 200:
+      m_box.showinfo("Alert", "Success!")
     else:
-      # Parse through media query and do the math (round to nearest hundredth)
-      # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
-      # Prep strings for concatenation for final mutation request
-      args_str = '''mutation('''
-      data_str = ""
-      variables = {}
-      entry_counter = 0
-
-      for x in response_parsable["data"]["MediaListCollection"]["lists"]:
-        # Loop through each media entry in each media watch status list ["entries"]
-        status_category = x["entries"]
-
-        for y in status_category:
-          temp_adv_score_list = []
-          weighted_score = 0
-
-          # Only get entries already scored by the user
-          if(y["score"] != 0):
-            temp_adv_score_list = list(y["advancedScores"].values())
-
-            # Calculate weighted score
-            for j in range(len(category_names)):
-              weighted_score += temp_adv_score_list[j] * category_weights[j]
-            weighted_score = rounder(weighted_score, 2)
-
-            # Variable names for the GraphQL query
-            entry_counter += 1
-            id_str = "id_" + str(entry_counter)
-            score_str = "score_" + str(entry_counter)
-            entry_str = "entry_" + str(entry_counter)
-
-            # Add mediaId and score to the mutation
-            variables[id_str] = y["mediaId"]
-            variables[score_str] = weighted_score
-
-            # Add new variables as arguments of the query
-            args_str += '''
-            ''' + "$" + id_str + ": Int,"
-            args_str += '''
-            ''' + "$" + score_str + ": Float,"
-
-            # Use aliases to add a new media entry to the request
-            data_str += '''
-            ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + \
-            ", score: $" + score_str + ") {score}"
-
-      # Add ") {" after args_str is done (and also remove extra comma)
-      args_str = args_str[:-1]
-      args_str += ''') {
-      '''
-
-      # Avengers assemble the full request
-      query = args_str + data_str + '''
-      }'''
-
-      # Header is used to make authenticated requests
-      header = {
-          'Authorization': f'Bearer ' + str(token)
-      }
-      response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
-      status_code = response.status_code
-
-      # Result alert
-      if int(status_code) == 200:
-        m_box.showinfo("Alert", "Success!")
-      else:
-        m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
+      m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
   
   # Error check: entered value must be int or float
   except ValueError:
