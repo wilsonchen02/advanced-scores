@@ -10,7 +10,6 @@
 # 4. Compute weighted score of title based on advanced scores from site
 # 5. Mutate entry score in the server
 
-import json
 import tkinter as tk
 import tkinter.ttk as ttk
 import webbrowser
@@ -20,25 +19,7 @@ from tkinter import messagebox as m_box
 import requests
 from oauthlib.oauth2 import WebApplicationClient
 
-# -- VARIABLES --
-# List holding the names of the scoring categories
-category_names = []
 
-# List holding the user assigned weights of the scoring categories
-category_weights = []
-label_list = []
-entry_list = []
-
-# Authenticated user's name
-auth_username = ""
-status_code = -1
-global token
-
-# Rounds number to specified sigfig
-def rounder(num, sigfig):
-  return round(num, sigfig-int(floor(log10(abs(num))))-1)
-
-# Do the math to (kinda) place window at center of display
 def center_window(window_name):
   win_width = window_name.winfo_reqwidth()
   win_height = window_name.winfo_reqheight()
@@ -46,274 +27,353 @@ def center_window(window_name):
   vert_center = int(window_name.winfo_screenheight()/2 - win_height/2)
   window_name.geometry("+{}+{}".format(horiz_center, vert_center))
 
-client_id = '8459'
-authorization_url = 'https://anilist.co/api/v2/oauth/authorize?client_id=' \
-                    + client_id + '&response_type=token'
-# User Authentication
-def connect_app_to_api():
-  client_secret = 'QvOHYXJT3J5sq88cdOMXPEI1uGKQj01ARoQ780tc'
-  redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
-  client = WebApplicationClient(client_id)
 
-  client.prepare_request_uri(
-    authorization_url,
-    redirect_uri
-  )
+class MyApplication():
 
-  client.prepare_request_body(
-    redirect_uri,
-    client_id,
-    client_secret
-  )
+  def __init__(self) -> None:
+    pass
 
-connect_app_to_api()
+  def run(self) -> None:
+    app_web_link = ApplicationWebsiteLink()
+    app_web_link.run()
+    login_window = LoginWindow()
+    login_window.setup()
+    login_window.run()
+    authorized_user = login_window.auth_username
+    token = login_window.token
+    weights_window = WeightsWindow(authorized_user, token)
+    weights_window.setup()
+    weights_window.run()
 
-# Redirect user to Anilist login on browser
-webbrowser.open(authorization_url)
+
+class ApplicationWebsiteLink():
+
+  client_id: str
+  authorization_url: str
+
+  def __init__(self) -> None:
+    self.client_id = '8459'
+    self.authorization_url = f'https://anilist.co/api/v2/oauth/authorize?client_id={self.client_id}&response_type=token'
+
+  def run(self) -> None:
+    self.connect_app_to_api()
+    self.open_anilist_website()
+
+  def connect_app_to_api(self) -> None:
+      client_secret = 'QvOHYXJT3J5sq88cdOMXPEI1uGKQj01ARoQ780tc'
+      redirect_url = 'https://anilist.co/api/v2/oauth/pin'
+      client = WebApplicationClient(self.client_id)
+
+      client.prepare_request_uri(
+        self.authorization_url,
+        redirect_url
+      )
+
+      client.prepare_request_body(
+        redirect_url,
+        self.client_id,
+        client_secret
+      )
+
+  def open_anilist_website(self) -> None:
+    webbrowser.open(self.authorization_url)
+
+class LoginWindow():
+
+  def __init__(self) -> None:
+    self.login_window = None
+    self.token_frame = None
+    self.token_label = None
+    self.access_token = None
+    self.auth_username = None
+    self.token = None
+
+  def setup(self) -> None:
+    self.create_user_input_gui()
+    self.create_description_box()
+    self.create_button()
+  
+  def run(self) -> None:
+    self.login_window.mainloop()
+
+
+  def create_description_box(self) -> None:
+    # Info about the app
+    m_box.showinfo("Description", 
+    "This program assumes that the user has advanced scores enabled on Anilist "
+    "and also has put in scores for said advanced scores. It will only update "
+    "anime entries marked as COMPLETED, CURRENTLY WATCHING, and PAUSED.")
+
+  def create_login_window(self):
+    self.login_window = tk.Tk()
+    self.login_window.title("Anilist Advanced Scores")
+    self.login_window.iconbitmap("./assets/amogus.ico")
+    center_window(self.login_window)
+
+  def create_token_frame(self):
+    self.token_frame = ttk.LabelFrame(self.login_window, text = "Access Token")
+    self.token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
+
+  def create_token_label(self):
+    self.token_label = ttk.Label(self.token_frame, text = "Enter token: ")
+    self.token_label.grid(row = 0, column = 0)
+
+  def create_input_box(self):
+    self.access_token = tk.StringVar()
+    input_box = ttk.Entry(self.token_frame, textvariable=self.access_token)
+    input_box.grid(row=0, column=1)
+    input_box.focus()
+
+  def create_user_input_gui(self):
+    self.create_login_window()
+    self.create_token_frame()
+    self.create_token_label()
+    self.create_input_box()
+
+  def login_button_callback(self):
+    self.token = self.access_token.get()
+    try:
+      query = '''
+      query {
+        Viewer {
+          name
+        }
+      }
+      '''
+      header = {
+          'Authorization': f'Bearer ' + str(self.token)
+      }
+
+      response = requests.post(graphql_url, json={'query': query}, headers=header)
+      status_code = response.status_code
+      login_response_parsable = response.json()
+
+      self.auth_username = login_response_parsable["data"]["Viewer"]["name"]
+      self.login_window.destroy()
+    except:
+      m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
+
+  def create_button(self):
+    token_button = ttk.Button(self.login_window, 
+                              text = "OK",
+                              command = self.login_button_callback)
+    token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
 
 graphql_url = 'https://graphql.anilist.co'
 
-# User input GUI
-login_window = tk.Tk()
-login_window.title("Anilist Advanced Scores")
-login_window.iconbitmap("./assets/amogus.ico")
 
-# Center the window
-center_window(login_window)
+class WeightsWindow():
 
-token_frame = ttk.LabelFrame(login_window, text = "Access Token")
-token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
+  def __init__(self, authorized_user, token) -> None:
+    self.weights_window = None
+    self.weights_description = None
+    self.user_label = None
+    self.weights_button = None
+    self.advanced_scores = None
+    self.weights_manager = None
+    self.category_frame = None
+    self.authorized_user = authorized_user
+    self.token = token
+    self.entries = []
 
-token_label = ttk.Label(token_frame, text = "Enter token: ")
-token_label.grid(row = 0, column = 0)
+  def setup(self):
+    self.load_advanced_scores()  #creates self.advanced_scores
+    self.create_weights_window()
+    self.create_weights_description()
+    self.create_category_inputs()  # creates self.entries
+    self.weights_manager = WeightsManager(self.token, self.advanced_scores, self.entries)
+    self.create_user_label()
+    self.create_weights_button()
 
-access_token = tk.StringVar()
+  def run(self) -> None:
+    self.weights_window.mainloop()
 
-input_box = ttk.Entry(token_frame, textvariable=access_token)
-input_box.grid(row=0, column=1)
-input_box.focus()
+  def create_category_inputs(self):
+    category_names = self.get_category_names()
+    self.entries = []
+    # Make an entry for each category
+    for i in range(len(category_names)):
+      new_label = ttk.Label(self.category_frame, text = category_names[i])
+      new_entry = ttk.Entry(self.category_frame)
+      new_label.grid(row = i, column = 0, padx = 5, pady = 5)
+      new_entry.grid(row = i, column = 1, padx = 5, pady = 5)
 
-# Info about the app
-m_box.showinfo("Description", 
-      "This program assumes that the user has advanced scores enabled on Anilist "
-      "and also has put in scores for said advanced scores. It will only update "
-      "anime entries marked as COMPLETED, CURRENTLY WATCHING, and PAUSED.")
+      # Add to lists as references
+      self.entries.append(new_entry)
 
-# Attempt login button
-def login_ok_btn():
-  global token
-  token = access_token.get()
-  try:
-    # Obtain user's Username
+    self.entries[0].focus()
+
+  def create_weights_button(self):
+    self.weights_button = ttk.Button(self.weights_window,
+                            text = "OK",
+                            command = self.weights_manager.weights_button_callback)
+    self.weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
+
+  def create_weights_window(self):
+    self.weights_window = tk.Tk()
+    self.weights_window.title("Anilist Advanced Scores")
+    self.weights_window.iconbitmap("./assets/amogus.ico")
+    center_window(self.weights_window)
+    self.create_category_frame()
+
+  def create_weights_description(self):
+    self.weights_description = ttk.Label(self.weights_window, text = \
+      "Please insert the weight of each scoring section, with the total weight = 1")
+    self.weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
+
+  def create_user_label(self):
+    self.user_label = ttk.Label(self.weights_window, text = f"User: {self.authorized_user}")
+    self.user_label.grid(row = 1, column = 0, padx = 10, pady = 0)
+
+  def create_category_frame(self):
+    self.category_frame = ttk.LabelFrame(self.weights_window, text = "Categories")
+    self.category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
+
+
+  def load_advanced_scores(self):
+    # Query to obtain names of advanced scoring sections and advanced
+    # scores of media (assuming the user's advanced scores are on)
     query = '''
-    query {
-      Viewer {
-        name
+    query($username: String) {
+      User(name: $username) {
+        mediaListOptions {
+          animeList {
+            advancedScoringEnabled
+            advancedScoring
+          }
+        }
+      }
+      MediaListCollection(userName: $username, type: ANIME, status_not_in:[PLANNING]) {
+        lists {
+          entries {
+            mediaId
+            score
+            advancedScores
+          }
+        }
       }
     }
     '''
-    # Header is used to make authenticated requests
-    header = {
-        'Authorization': f'Bearer ' + str(token)
+    variables = {
+      "username": self.authorized_user
     }
+    # Make the HTTP API request
+    response = requests.post(graphql_url, json={'query': query, 'variables': variables})
+    self.advanced_scores = response.json()
 
-    response = requests.post(graphql_url, json={'query': query}, headers=header)
-    status_code = response.status_code
-    response_parsable = response.json()
+  def get_category_names(self):
+    # Parse names of scoring categories and store in list
+    return self.advanced_scores["data"]["User"]["mediaListOptions"]["animeList"]["advancedScoring"]
 
-    global auth_username
-    auth_username = response_parsable["data"]["Viewer"]["name"]
-    login_window.destroy()
-  except:
-    m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
+class WeightsManager():
 
+  def __init__(self, token, advanced_scores, entries) -> None:
+    self.category_weights = []
+    self.entries = entries
+    self.token = token
+    self.advanced_scores = advanced_scores
 
-token_button = ttk.Button(login_window, 
-                          text = "OK",
-                          command = login_ok_btn)
-token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
+  def is_entry_empty(self, entry):
+    return len(entry) == 0
 
-# Run login GUI
-login_window.mainloop()
+  def is_entry_not_a_valid_decimal(self, entry):
+    return float(entry) < 0 or float(entry) > 1
 
+  def create_category_weights_list(self) -> bool:
+    self.category_weights = []
+    for raw_entry in self.entries:
+      entry = raw_entry.get()
+      if self.is_entry_empty(entry):
+        m_box.showerror("Error", f"Entry is missing a value.")
+        return False
+      elif self.is_entry_not_a_valid_decimal(entry):
+        m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
+        return False
+      else:
+        self.category_weights.append(float(entry))
 
-# Query to obtain names of advanced scoring sections and advanced
-# scores of media (assuming the user's advanced scores are on)
-query = '''
-query($username: String) {
-  User(name: $username) {
-    mediaListOptions {
-      animeList {
-        advancedScoringEnabled
-        advancedScoring
+    if sum(self.category_weights) != 1:
+        # Error check: total weight must be 1
+        m_box.showerror("Error", f"Total weight must be equal to 1.\n"
+                                  f"Your total weight: {sum(self.category_weights)}")
+        return False
+    return True
+
+  def calculate_weighted_score(self, entry):
+    advanced_scores = list(entry["advancedScores"].values())
+    weighted_score = 0
+    for j in range(len(self.category_weights)):
+      weighted_score += advanced_scores[j] * self.category_weights[j]
+      weighted_score = round(weighted_score, 1)
+    return weighted_score
+
+  def is_entry_not_scored(self, entry):
+    return entry["score"] == 0
+
+  def weights_button_callback(self):
+    try:    
+      success = self.create_category_weights_list()
+      if not success:
+        return
+      # Parse through media query and do the math (round to nearest hundredth)
+      # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
+      # Prep strings for concatenation for final mutation request
+      args_str = """mutation("""
+      data_str = ""
+      variables = {}
+      entry_counter = 0
+
+      for status_lists in self.advanced_scores["data"]["MediaListCollection"]["lists"]:
+        entries = status_lists["entries"]
+
+        for entry in entries:
+          # Only get entries already scored by the user
+          if(self.is_entry_not_scored(entry)):
+            continue
+          weighted_score = self.calculate_weighted_score(entry)
+          # Variable names for the GraphQL query
+          entry_counter += 1
+          id_str = f"id_{entry_counter}"
+          score_str = f"score_{entry_counter}"
+          entry_str = f"entry_{entry_counter}"
+          # Add mediaId and score to the mutation
+          variables[id_str] = entry["mediaId"]
+          variables[score_str] = weighted_score
+
+          # Add new variables as arguments of the query
+          args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
+
+          # Use aliases to add a new media entry to the request
+          data_str += f"\n{entry_str}: SaveMediaListEntry(mediaId: ${id_str}, score: ${score_str}) " + "{score}"
+
+      # Add ") {" after args_str is done (and also remove extra comma)
+      args_str = args_str[:-1]
+      args_str += ") {\n" 
+      # Avengers assemble the full request
+      query = f"{args_str}{data_str}" + "}" 
+
+      # 3. THIRD PART IS SUBMITTING THE REQUEST
+      # Header is used to make authenticated requests
+      header = {
+          'Authorization': f'Bearer ' + str(self.token)
       }
-    }
-  }
-  MediaListCollection(userName: $username, type: ANIME, status_not_in:[PLANNING]) {
-    lists {
-      entries {
-        mediaId
-        score
-        advancedScores
-      }
-    }
-  }
-}
-'''
-variables = {
-  "username": auth_username
-}
-# Make the HTTP API request
-response = requests.post(graphql_url, json={'query': query, 'variables': variables})
-response_parsable = response.json()
+      response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
+      status_code = response.status_code
+      # Result alert
+      if int(status_code) == 200:
+        m_box.showinfo("Alert", "Success!")
+      else:
+        m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
+    except ValueError:
+      m_box.showerror("Error", f"Value must be numeric.")
+    except Exception as e:
+      m_box.showerror("Error", f"Something went wrong." + str(e))
 
-# Parse names of scoring categories and store in list
-category_names = response_parsable["data"]["User"]["mediaListOptions"] \
-                                  ["animeList"]["advancedScoring"]
 
-# Weights GUI
-weights_window = tk.Tk()
+def main():
+    my_application = MyApplication()
+    my_application.run()
 
-weights_description = ttk.Label(weights_window, text = \
-  "Please insert the weight of each scoring section, with the total weight = 1")
-weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
 
-username_label = ttk.Label(weights_window, text = f"User: {auth_username}")
-username_label.grid(row = 1, column = 0, padx = 10, pady = 0)
-
-category_frame = ttk.LabelFrame(weights_window, text = "Categories")
-category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
-
-def add_entries_to_category_weights(entry, entries):
-  new_entries = entries
-  if len(entry) == 0:
-    # Error check: entry not filled in
-    m_box.showerror("Error", f"Entry is missing a value.")
-    return new_entries
-  elif float(entry) < 0 or float(entry) > 1:
-    # Error check: make sure values are between 0 and 1
-    m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
-    return new_entries
-  else:
-    # sum_weights += float(temp)
-    new_entries.append(float(entry))
-  return new_entries
-
-def calculate_weighted_score(temp_adv_score_list, category_weights):
-  weighted_score = 0
-  for j in range(len(category_weights)):
-    weighted_score += temp_adv_score_list[j] * category_weights[j]
-    weighted_score = rounder(weighted_score, 2)
-  return weighted_score
-
-# Submit weight values button
-def weights_ok_btn():
-  try:    
-    sum_weights = 0
-    category_weights = []
-
-    for i in range(len(entry_list)):
-      category_weights = add_entries_to_category_weights(entry_list[i].get(), category_weights)
-    
-    sum_weights = sum(category_weights)
-    
-    if sum_weights != 1:
-      # Error check: total weight must be 1
-      m_box.showerror("Error", f"Total weight must be equal to 1.\n"
-                                "Your total weight: " + str(sum_weights))
-      return
-
-    # Parse through media query and do the math (round to nearest hundredth)
-    # Loop through lists (in this order): CURRENTLY WATCHING, COMPLETED, PAUSED, DROPPED
-    # Prep strings for concatenation for final mutation request
-    args_str = '''mutation('''
-    data_str = ""
-    variables = {}
-    entry_counter = 0
-
-    for x in response_parsable["data"]["MediaListCollection"]["lists"]:
-      # Loop through each media entry in each media watch status list ["entries"]
-      status_category = x["entries"]
-
-      for y in status_category:
-        # Only get entries already scored by the user
-        if(y["score"] == 0):
-          continue
-
-        temp_adv_score_list = []
-
-        temp_adv_score_list = list(y["advancedScores"].values())
-
-        # Calculate weighted score
-        weighted_score = calculate_weighted_score(
-          temp_adv_score_list, category_weights)
-
-        # Variable names for the GraphQL query
-        entry_counter += 1
-        id_str = f"id_{entry_counter}"
-        score_str = f"score_{entry_counter}"
-        entry_str = f"entry_{entry_counter}"
-
-        # Add mediaId and score to the mutation
-        variables[id_str] = y["mediaId"]
-        variables[score_str] = weighted_score
-
-        # Add new variables as arguments of the query
-        args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
-
-        # Use aliases to add a new media entry to the request
-        data_str += '''
-        ''' + entry_str + ": SaveMediaListEntry(mediaId: $" + id_str + \
-        ", score: $" + score_str + ") {score}"
-
-    # Add ") {" after args_str is done (and also remove extra comma)
-    args_str = args_str[:-1]
-    args_str += ") {\n"
-
-    # Avengers assemble the full request
-    query = args_str + data_str + "\n"
-
-    # Header is used to make authenticated requests
-    header = {
-        'Authorization': f'Bearer ' + str(token)
-    }
-    response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
-    status_code = response.status_code
-
-    # Result alert
-    if int(status_code) == 200:
-      m_box.showinfo("Alert", "Success!")
-    else:
-      m_box.showerror("Error", f"Something went wrong.\nError Code: {status_code}")
-  
-  # Error check: entered value must be int or float
-  except ValueError:
-    m_box.showerror("Error", f"Value must be numeric.")
-  
-  # If all else fails...
-  except:
-    m_box.showerror("Error", f"Something went wrong.")
-
-# Make an entry for each category
-for i in range(len(category_names)):
-  new_label = ttk.Label(category_frame, text = category_names[i])
-  new_entry = ttk.Entry(category_frame)
-  new_label.grid(row = i, column = 0, padx = 5, pady = 5)
-  new_entry.grid(row = i, column = 1, padx = 5, pady = 5)
-
-  # Add to lists as references
-  label_list.append(new_label)
-  entry_list.append(new_entry)
-
-# Run weights GUI
-weights_window.title("Anilist Advanced Scores")
-weights_window.iconbitmap("./assets/amogus.ico")
-center_window(weights_window)
-entry_list[0].focus()
-
-weights_button = ttk.Button(weights_window,
-                            text = "OK",
-                            command = weights_ok_btn)
-weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
-
-weights_window.mainloop()
+if __name__ == "__main__":
+  main()
