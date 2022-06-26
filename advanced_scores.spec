@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['advancedScores.py'],
+    ['advanced_scores.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -28,7 +28,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='advancedScores',
+    name='advanced_scores',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
