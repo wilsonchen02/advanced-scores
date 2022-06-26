@@ -76,66 +76,65 @@ class ApplicationWebsiteLink():
 
 class LoginWindow():
 
-  access_token: tk.StringVar
   auth_username: str
-  login_window: tk.Tk
-  token_frame: ttk.LabelFrame
-  token_label: ttk.Label
   token: str
+  _access_token: tk.StringVar
+  _login_window: tk.Tk
+  _token_frame: ttk.LabelFrame
+  _token_label: ttk.Label
 
   def __init__(self) -> None:
-    self.login_window = None
-    self.token_frame = None
-    self.token_label = None
-    self.access_token = None
     self.auth_username = None
     self.token = None
+    self._access_token = None
+    self._login_window = None
+    self._token_frame = None
+    self._token_label = None
     self.setup()
 
   def setup(self) -> None:
-    self.create_user_input_gui()
-    self.create_description_box()
-    self.create_button()
+    self._create_user_input_gui()
+    self._create_description_box()
+    self._create_button()
   
   def run(self) -> None:
-    self.login_window.mainloop()
+    self._login_window.mainloop()
 
-
-  def create_description_box(self) -> None:
+  def _create_description_box(self) -> None:
     # Info about the app
     m_box.showinfo("Description", 
     "This program assumes that the user has advanced scores enabled on Anilist "
     "and also has put in scores for said advanced scores. It will only update "
     "anime entries marked as COMPLETED, CURRENTLY WATCHING, and PAUSED.")
 
-  def create_login_window(self) -> None:
-    self.login_window = tk.Tk()
-    self.login_window.title("Anilist Advanced Scores")
-    self.login_window.iconbitmap("./assets/amogus.ico")
-    center_window(self.login_window)
+  def _create_login_window(self) -> None:
+    self._login_window = tk.Tk()
+    self._login_window.title("Anilist Advanced Scores")
+    self._login_window.iconbitmap("./assets/amogus.ico")
+    center_window(self._login_window)
 
-  def create_token_frame(self) -> None:
-    self.token_frame = ttk.LabelFrame(self.login_window, text = "Access Token")
-    self.token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
+  def _create_token_frame(self) -> None:
+    self._token_frame = ttk.LabelFrame(self._login_window, text = "Access Token")
+    self._token_frame.grid(row = 0, column = 0, padx = 10, pady = 10)
 
-  def create_token_label(self) -> None:
-    self.token_label = ttk.Label(self.token_frame, text = "Enter token: ")
-    self.token_label.grid(row = 0, column = 0)
+  def _create_token_label(self) -> None:
+    self._token_label = ttk.Label(self._token_frame, text = "Enter token: ")
+    self._token_label.grid(row = 0, column = 0)
 
-  def create_input_box(self) -> None:
-    self.access_token = tk.StringVar()
-    input_box = ttk.Entry(self.token_frame, textvariable=self.access_token)
+  def _create_input_box(self) -> None:
+    self._access_token = tk.StringVar()
+    input_box = ttk.Entry(self._token_frame, textvariable=self._access_token)
     input_box.grid(row=0, column=1)
     input_box.focus()
 
-  def create_user_input_gui(self) -> None:
-    self.create_login_window()
-    self.create_token_frame()
-    self.create_token_label()
-    self.create_input_box()
+  def _create_user_input_gui(self) -> None:
+    self._create_login_window()
+    self._create_token_frame()
+    self._create_token_label()
+    self._create_input_box()
 
-  def login_button_callback(self) -> None:
-    self.token = self.access_token.get()
+  def _login_button_callback(self) -> None:
+    self.token = self._access_token.get()
     try:
       query = '''
       query {
@@ -153,70 +152,34 @@ class LoginWindow():
       login_response_parsable = response.json()
 
       self.auth_username = login_response_parsable["data"]["Viewer"]["name"]
-      self.login_window.destroy()
+      self._login_window.destroy()
     except:
       m_box.showerror("Error", f"Something went wrong.\n(Error Code: {status_code})")
 
-  def create_button(self) -> None:
-    token_button = ttk.Button(self.login_window, 
+  def _create_button(self) -> None:
+    token_button = ttk.Button(self._login_window, 
                               text = "OK",
-                              command = self.login_button_callback)
+                              command = self._login_button_callback)
     token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
 
 graphql_url = 'https://graphql.anilist.co'
 
 class WeightsManager():
 
-  category_weights: List[float]
-  entries: List[ttk.Entry]
-  token: str
-  advanced_scores: str
+  _advanced_scores: str
+  _category_weights: List[float]
+  _entries: List[ttk.Entry]
+  _token: str
 
   def __init__(self, token: str, advanced_scores: str, entries: ttk.Entry) -> None:
-    self.category_weights = []
-    self.entries = entries
-    self.token = token
-    self.advanced_scores = advanced_scores
-
-  def is_entry_empty(self, entry: ttk.Entry) -> bool:
-    return len(entry) == 0
-
-  def is_entry_not_a_valid_decimal(self, entry: ttk.Entry) -> bool:
-    return float(entry) < 0 or float(entry) > 1
-
-  def create_category_weights_list(self) -> bool:
-    self.category_weights = []
-    for raw_entry in self.entries:
-      entry = raw_entry.get()
-      if self.is_entry_empty(entry):
-        m_box.showerror("Error", f"Entry is missing a value.")
-        return False
-      elif self.is_entry_not_a_valid_decimal(entry):
-        m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
-        return False
-      else:
-        self.category_weights.append(float(entry))
-    if sum(self.category_weights) != 1:
-        # Error check: total weight must be 1
-        m_box.showerror("Error", f"Total weight must be equal to 1.\n"
-                                  f"Your total weight: {sum(self.category_weights)}")
-        return False
-    return True
-
-  def calculate_weighted_score(self, entry: ttk.Entry) -> float:
-    advanced_scores = list(entry["advancedScores"].values())
-    weighted_score = 0
-    for j in range(len(self.category_weights)):
-      weighted_score += advanced_scores[j] * self.category_weights[j]
-    weighted_score = round(weighted_score, 1)
-    return weighted_score
-
-  def is_entry_not_scored(self, entry: ttk.Entry) -> bool:
-    return entry["score"] == 0
+    self._advanced_scores = advanced_scores
+    self._category_weights = []
+    self._entries = entries
+    self._token = token
 
   def weights_button_callback(self) -> None:
     try:    
-      success = self.create_category_weights_list()
+      success = self._create_category_weights_list()
       if not success:
         return
       # Parse through media query and do the math (round to nearest hundredth)
@@ -227,14 +190,14 @@ class WeightsManager():
       variables = {}
       entry_counter = 0
 
-      for status_lists in self.advanced_scores["data"]["MediaListCollection"]["lists"]:
+      for status_lists in self._advanced_scores["data"]["MediaListCollection"]["lists"]:
         entries = status_lists["entries"]
 
         for entry in entries:
           # Only get entries already scored by the user
-          if(self.is_entry_not_scored(entry)):
+          if(self._is_entry_not_scored(entry)):
             continue
-          weighted_score = self.calculate_weighted_score(entry)
+          weighted_score = self._calculate_weighted_score(entry)
           # Variable names for the GraphQL query
           entry_counter += 1
           id_str = f"id_{entry_counter}"
@@ -259,7 +222,7 @@ class WeightsManager():
       # 3. THIRD PART IS SUBMITTING THE REQUEST
       # Header is used to make authenticated requests
       header = {
-          'Authorization': f'Bearer ' + str(self.token)
+          'Authorization': f'Bearer ' + str(self._token)
       }
       response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=header)
       status_code = response.status_code
@@ -273,88 +236,118 @@ class WeightsManager():
     except Exception as e:
       m_box.showerror("Error", f"Something went wrong." + str(e))
 
+  def _calculate_weighted_score(self, entry: ttk.Entry) -> float:
+    advanced_scores = list(entry["advancedScores"].values())
+    weighted_score = 0
+    for j in range(len(self._category_weights)):
+      weighted_score += advanced_scores[j] * self._category_weights[j]
+    weighted_score = round(weighted_score, 1)
+    return weighted_score
+
+  def _create_category_weights_list(self) -> bool:
+    self._category_weights = []
+    for raw_entry in self._entries:
+      entry = raw_entry.get()
+      if self._is_entry_empty(entry):
+        m_box.showerror("Error", f"Entry is missing a value.")
+        return False
+      elif self._is_entry_not_a_valid_decimal(entry):
+        m_box.showerror("Error", f"Weights must be between 0 and 1 (inclusive).")
+        return False
+      else:
+        self._category_weights.append(float(entry))
+    if sum(self._category_weights) != 1:
+        # Error check: total weight must be 1
+        m_box.showerror("Error", f"Total weight must be equal to 1.\n"
+                                  f"Your total weight: {sum(self._category_weights)}")
+        return False
+    return True
+
+  def _is_entry_empty(self, entry: ttk.Entry) -> bool:
+    return len(entry) == 0
+
+  def _is_entry_not_a_valid_decimal(self, entry: ttk.Entry) -> bool:
+    return float(entry) < 0 or float(entry) > 1
+
+  def _is_entry_not_scored(self, entry: ttk.Entry) -> bool:
+    return entry["score"] == 0
+
 class WeightsWindow():
 
-  weights_window: tk.Tk
-  weights_description: ttk.Label
-  user_label: ttk.Label
-  weights_button: ttk.Button
-  advanced_scores: str
-  weights_manager: WeightsManager
-  category_frame: ttk.LabelFrame
-  auth_username: str
-  token: str
-  entries: List[ttk.Entry]
+  _advanced_scores: str
+  _auth_username: str
+  _category_frame: ttk.LabelFrame
+  _entries: List[ttk.Entry]
+  _token: str
+  _user_label: ttk.Label
+  _weights_button: ttk.Button
+  _weights_description: ttk.Label
+  _weights_manager: WeightsManager
+  _weights_window: tk.Tk
 
   def __init__(self, auth_username: str, token: str) -> None:
-    self.weights_window = None
-    self.weights_description = None
-    self.user_label = None
-    self.weights_button = None
-    self.advanced_scores = None
-    self.weights_manager = None
-    self.category_frame = None
-    self.auth_username = auth_username
-    self.token = token
-    self.entries = []
-    self.setup()
-
-  def setup(self) -> None:
-    self.load_advanced_scores()  #creates self.advanced_scores
-    self.create_weights_window()
-    self.create_weights_description()
-    self.create_category_inputs()  # creates self.entries
-    self.weights_manager = WeightsManager(self.token, self.advanced_scores, self.entries)
-    self.create_user_label()
-    self.create_weights_button()
+    self._advanced_scores = None
+    self._auth_username = auth_username
+    self._category_frame = None
+    self._entries = []
+    self._token = token
+    self._user_label = None
+    self._weights_button = None
+    self._weights_description = None
+    self._weights_manager = None
+    self._weights_window = None
+    self._setup()
 
   def run(self) -> None:
-    self.weights_window.mainloop()
+    self._weights_window.mainloop()
 
-  def create_category_inputs(self) -> None:
-    category_names = self.get_category_names()
-    self.entries = []
+  def _create_category_inputs(self) -> None:
+    category_names = self._get_category_names()
+    self._entries = []
     # Make an entry for each category
     for i in range(len(category_names)):
-      new_label = ttk.Label(self.category_frame, text = category_names[i])
-      new_entry = ttk.Entry(self.category_frame)
+      new_label = ttk.Label(self._category_frame, text = category_names[i])
+      new_entry = ttk.Entry(self._category_frame)
       new_label.grid(row = i, column = 0, padx = 5, pady = 5)
       new_entry.grid(row = i, column = 1, padx = 5, pady = 5)
 
       # Add to lists as references
-      self.entries.append(new_entry)
+      self._entries.append(new_entry)
 
-    self.entries[0].focus()
+    self._entries[0].focus()
 
-  def create_weights_button(self) -> None:
-    self.weights_button = ttk.Button(
-      self.weights_window, text = "OK",
-      command = self.weights_manager.weights_button_callback
+  def _create_category_frame(self) -> None:
+    self._category_frame = ttk.LabelFrame(self._weights_window, text = "Categories")
+    self._category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
+
+  def _create_user_label(self) -> None:
+    self._user_label = ttk.Label(self._weights_window, text = f"User: {self._auth_username}")
+    self._user_label.grid(row = 1, column = 0, padx = 10, pady = 0)
+
+  def _create_weights_button(self) -> None:
+    self._weights_button = ttk.Button(
+      self._weights_window, text = "OK",
+      command = self._weights_manager.weights_button_callback
     )
-    self.weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
+    self._weights_button.grid(row = 3, column = 0, padx = 5, pady = 5)
 
-  def create_weights_window(self) -> None:
-    self.weights_window = tk.Tk()
-    self.weights_window.title("Anilist Advanced Scores")
-    self.weights_window.iconbitmap("./assets/amogus.ico")
-    center_window(self.weights_window)
-    self.create_category_frame()
-
-  def create_weights_description(self) -> None:
-    self.weights_description = ttk.Label(self.weights_window, text = \
+  def _create_weights_description(self) -> None:
+    self._weights_description = ttk.Label(self._weights_window, text = \
       "Please insert the weight of each scoring section, with the total weight = 1")
-    self.weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
+    self._weights_description.grid(row = 0, column = 0, padx = 10, pady = 5)
 
-  def create_user_label(self) -> None:
-    self.user_label = ttk.Label(self.weights_window, text = f"User: {self.auth_username}")
-    self.user_label.grid(row = 1, column = 0, padx = 10, pady = 0)
+  def _create_weights_window(self) -> None:
+    self._weights_window = tk.Tk()
+    self._weights_window.title("Anilist Advanced Scores")
+    self._weights_window.iconbitmap("./assets/amogus.ico")
+    center_window(self._weights_window)
+    self._create_category_frame()
 
-  def create_category_frame(self) -> None:
-    self.category_frame = ttk.LabelFrame(self.weights_window, text = "Categories")
-    self.category_frame.grid(row = 2, column = 0, padx = 10, pady = 10)
+  def _get_category_names(self) -> List[str]:
+    # Parse names of scoring categories and store in list
+    return self._advanced_scores["data"]["User"]["mediaListOptions"]["animeList"]["advancedScoring"]
 
-
-  def load_advanced_scores(self) -> None:
+  def _load_advanced_scores(self) -> None:
     # Query to obtain names of advanced scoring sections and advanced
     # scores of media (assuming the user's advanced scores are on)
     query = '''
@@ -379,15 +372,20 @@ class WeightsWindow():
     }
     '''
     variables = {
-      "username": self.auth_username
+      "username": self._auth_username
     }
     # Make the HTTP API request
     response = requests.post(graphql_url, json={'query': query, 'variables': variables})
-    self.advanced_scores = response.json()
+    self._advanced_scores = response.json()
 
-  def get_category_names(self) -> List[str]:
-    # Parse names of scoring categories and store in list
-    return self.advanced_scores["data"]["User"]["mediaListOptions"]["animeList"]["advancedScoring"]
+  def _setup(self) -> None:
+    self._load_advanced_scores()  #creates self.advanced_scores
+    self._create_weights_window()
+    self._create_weights_description()
+    self._create_category_inputs()  # creates self.entries
+    self._weights_manager = WeightsManager(self._token, self._advanced_scores, self._entries)
+    self._create_user_label()
+    self._create_weights_button()
 
 
 def main():
