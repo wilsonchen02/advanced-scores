@@ -10,11 +10,13 @@
 # 4. Compute weighted score of title based on advanced scores from site
 # 5. Mutate entry score in the server
 
+import json
 import tkinter as tk
 import tkinter.ttk as ttk
 import webbrowser
 from tkinter import messagebox as m_box
 from typing import List
+from typing import TypedDict
 
 import requests
 from oauthlib.oauth2 import WebApplicationClient
@@ -84,6 +86,7 @@ class LoginWindow():
     token: str
     _access_token: tk.StringVar
     _login_window: tk.Tk
+    _status_code: int
     _token_frame: ttk.LabelFrame
     _token_label: ttk.Label
 
@@ -92,6 +95,7 @@ class LoginWindow():
         self.token = None
         self._access_token = None
         self._login_window = None
+        self._status_code = -1
         self._token_frame = None
         self._token_label = None
         self.setup()
@@ -161,7 +165,7 @@ class LoginWindow():
             response = requests.post(
                 graphql_url, json={'query': query}, headers=header
                 )
-            status_code = response.status_code
+            self._status_code = response.status_code
             login_response_parsable = response.json()
 
             self.auth_username = login_response_parsable[
@@ -169,7 +173,7 @@ class LoginWindow():
             self._login_window.destroy()
         except Exception:
             m_box.showerror(
-                "Error", f"Something went wrong.\n(Error Code: {status_code})"
+                "Error", f"Something went wrong.\n(Error Code: {self._status_code})"
             )
 
     def _create_button(self) -> None:
@@ -187,7 +191,10 @@ class WeightsManager():
     _advanced_scores: str
     _category_weights: List[float]
     _entries: List[ttk.Entry]
+    _max_query_counter: int
+    _status_code: int
     _token: str
+    _variables: TypedDict
 
     def __init__(
         self, token: str, advanced_scores: str, entries: ttk.Entry
@@ -195,71 +202,98 @@ class WeightsManager():
         self._advanced_scores = advanced_scores
         self._category_weights = []
         self._entries = entries
+        self._max_query_counter = 200
+        self._status_code = -1
         self._token = token
+        self._variables = {}
+    
+    # For debugging purposes
+    def jprint(self, obj):
+        text = json.dumps(obj, indent=4)
+        print(text)
+
+    def send_mutation_request(self, num_entries_to_send: int) -> None:
+        args_str = """mutation("""
+        data_str = ""
+
+        # Loop through all the items in the dictionary
+        for i in range(1, num_entries_to_send + 1):
+            id_str = f"id_{i}"
+            score_str = f"score_{i}"
+            entry_str = f"entry_{i}"
+
+            # Add new variables as arguments of the query
+            args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
+
+            # Use aliases to add a new media entry to the request
+            data_str += f"\n{entry_str}: SaveMediaListEntry(mediaId: ${id_str}, score: ${score_str}) " + "{score}"
+
+        # Add ") {" after args_str is done (and also remove extra comma)
+        args_str = args_str[:-1]
+        args_str += ") {\n" 
+        # Avengers assemble the full request
+        query = f"{args_str}{data_str}" + "}" 
+
+        # 3. THIRD PART IS SUBMITTING THE REQUEST
+        # Header is used to make authenticated requests
+        header = {
+            'Authorization': f'Bearer ' + str(self._token)
+        }
+
+        response = requests.post(graphql_url, json={'query': query, 'variables': self._variables}, headers=header)
+        self._status_code = response.status_code
+
+        # Reset dictionary and counter 
+        self._variables = {}
+        num_entries_to_send = 0   # Should reset entry_counter 
 
     def weights_button_callback(self) -> None:
         try:
             success = self._create_category_weights_list()
             if not success:
                 return
+            
             # Parse through media query and do the math (round to nearest
             # hundredth)
             # Loop through lists (in this order): CURRENTLY WATCHING,
             # COMPLETED, PAUSED, DROPPED
             # Prep strings for concatenation for final mutation request
-            args_str = """mutation("""
-            data_str = ""
-            variables = {}
+            self._variables = {}
             entry_counter = 0
 
             for status_lists in self._advanced_scores[
                     "data"]["MediaListCollection"]["lists"]:
                 entries = status_lists["entries"]
 
+                # Query complexity is limited, max cap is 500. Split into
+                # multiple requests if necessary
                 for entry in entries:
                     # Only get entries already scored by the user
                     if(self._is_entry_not_scored(entry)):
                         continue
-                    weighted_score = self._calculate_weighted_score(entry)
-                    # Variable names for the GraphQL query
+
                     entry_counter += 1
-                    id_str = f"id_{entry_counter}"
-                    score_str = f"score_{entry_counter}"
-                    entry_str = f"entry_{entry_counter}"
-                    # Add mediaId and score to the mutation
-                    variables[id_str] = entry["mediaId"]
-                    variables[score_str] = weighted_score
+                    weighted_score = self._calculate_weighted_score(entry)
 
-                    # Add new variables as arguments of the query
-                    args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
+                    # Load up entry's mediaId and score for the next request
+                    self._variables[f"id_{entry_counter}"] = entry["mediaId"]
+                    self._variables[f"score_{entry_counter}"] = weighted_score
 
-                    # Use aliases to add a new media entry to the request
-                    data_str += f"\n{entry_str}: SaveMediaListEntry(mediaId: $"
-                    data_str += f"{id_str}, score: ${score_str}) " + "{score}"
+                    # Once it hits the max, send off what's in the dictionary
+                    if entry_counter >= self._max_query_counter:
+                        self.send_mutation_request(entry_counter)
+                        continue
 
-            # Add ") {" after args_str is done (and also remove extra comma)
-            args_str = args_str[:-1]
-            args_str += ") {\n"
-            # Avengers assemble the full request
-            query = f"{args_str}{data_str}" + "}"
+            # Send out request for remaining changes
+            self.send_mutation_request(entry_counter)
 
-            # 3. THIRD PART IS SUBMITTING THE REQUEST
-            # Header is used to make authenticated requests
-            header = {
-                'Authorization': f'Bearer ' + str(self._token)
-            }
-            response = requests.post(
-                graphql_url, json={'query': query, 'variables': variables},
-                headers=header
-            )
-            status_code = response.status_code
             # Result alert
-            if int(status_code) == 200:
+            if int(self._status_code) == 200:
                 m_box.showinfo("Alert", "Success!")
             else:
                 m_box.showerror(
                     "Error",
-                    f"Something went wrong.\nError Code: {status_code}"
+                    f"Something went wrong.\nError Code: {self._status_code}"
                 )
         except ValueError:
             m_box.showerror("Error", f"Value must be numeric.")
@@ -288,7 +322,8 @@ class WeightsManager():
                 return False
             else:
                 self._category_weights.append(float(entry))
-        if sum(self._category_weights) != 1:
+        epsilon = 0.000001
+        if abs(sum(self._category_weights) - 1) > epsilon:
             # Error check: total weight must be 1
             m_box.showerror(
                 "Error", f"Total weight must be equal to 1.\n"
@@ -373,8 +408,8 @@ class WeightsWindow():
     def _create_weights_description(self) -> None:
         self._weights_description = ttk.Label(
             self._weights_window,
-            text="Please insert the weight of each scoring section, with the \
-                total weight = 1"
+            text="Please insert the weight of each scoring section, with the " + \
+                "total weight = 1"
         )
         self._weights_description.grid(row=0, column=0, padx=10, pady=5)
 
