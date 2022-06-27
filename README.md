@@ -36,3 +36,9 @@ anime entries marked as COMPLETED, CURRENTLY WATCHING, PAUSED, and DROPPED.**
 
 *Note: If you recently changed some advanced scores of an entry and the program is still open, 
 please close and reopen the program before trying to update your weighted scores.*
+
+# Building the ```.exe```
+
+For those who want to build the application itself, type this into Command Prompt:
+
+```python3 -m PyInstaller --onefile advanced_scores.py```
