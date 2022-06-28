@@ -39,6 +39,6 @@ please close and reopen the program before trying to update your weighted scores
 
 # Building the ```.exe```
 
-For those who want to build the application itself, type this into Command Prompt:
+For those who want to build the application itself, ```cd``` into the project's file directory and type this into Command Prompt:
 
-```python3 -m PyInstaller --onefile advanced_scores.py```
+```python3 -m PyInstaller --onefile --windowed advanced_scores.py```
