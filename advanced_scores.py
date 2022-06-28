@@ -206,46 +206,6 @@ class WeightsManager():
         self._status_code = -1
         self._token = token
         self._variables = {}
-    
-    # For debugging purposes
-    def jprint(self, obj):
-        text = json.dumps(obj, indent=4)
-        print(text)
-
-    def send_mutation_request(self, num_entries_to_send: int) -> None:
-        args_str = """mutation("""
-        data_str = ""
-
-        # Loop through all the items in the dictionary
-        for i in range(1, num_entries_to_send + 1):
-            id_str = f"id_{i}"
-            score_str = f"score_{i}"
-            entry_str = f"entry_{i}"
-
-            # Add new variables as arguments of the query
-            args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
-
-            # Use aliases to add a new media entry to the request
-            data_str += f"\n{entry_str}: SaveMediaListEntry(mediaId: ${id_str}, score: ${score_str}) " + "{score}"
-
-        # Add ") {" after args_str is done (and also remove extra comma)
-        args_str = args_str[:-1]
-        args_str += ") {\n" 
-        # Avengers assemble the full request
-        query = f"{args_str}{data_str}" + "}" 
-
-        # 3. THIRD PART IS SUBMITTING THE REQUEST
-        # Header is used to make authenticated requests
-        header = {
-            'Authorization': f'Bearer ' + str(self._token)
-        }
-
-        response = requests.post(graphql_url, json={'query': query, 'variables': self._variables}, headers=header)
-        self._status_code = response.status_code
-
-        # Reset dictionary and counter 
-        self._variables = {}
-        num_entries_to_send = 0   # Should reset entry_counter 
 
     def weights_button_callback(self) -> None:
         try:
@@ -259,7 +219,6 @@ class WeightsManager():
             # COMPLETED, PAUSED, DROPPED
             # Prep strings for concatenation for final mutation request
             self._variables = {}
-            entry_counter = 0
 
             for status_lists in self._advanced_scores[
                     "data"]["MediaListCollection"]["lists"]:
@@ -272,20 +231,19 @@ class WeightsManager():
                     if(self._is_entry_not_scored(entry)):
                         continue
 
-                    entry_counter += 1
                     weighted_score = self._calculate_weighted_score(entry)
 
+                    entry_counter = int(len(self._variables) / 2)
                     # Load up entry's mediaId and score for the next request
                     self._variables[f"id_{entry_counter}"] = entry["mediaId"]
                     self._variables[f"score_{entry_counter}"] = weighted_score
 
                     # Once it hits the max, send off what's in the dictionary
                     if entry_counter >= self._max_query_counter:
-                        self.send_mutation_request(entry_counter)
-                        continue
+                        self._send_mutation_request()
 
             # Send out request for remaining changes
-            self.send_mutation_request(entry_counter)
+            self._send_mutation_request()
 
             # Result alert
             if int(self._status_code) == 200:
@@ -339,8 +297,46 @@ class WeightsManager():
         return float(entry) < 0 or float(entry) > 1
 
     def _is_entry_not_scored(self, entry: ttk.Entry) -> bool:
-        return entry["score"] == 0
+        return False
+        # return entry["score"] == 0
 
+    def _jprint(self, obj):
+        # For debugging purposes
+        text = json.dumps(obj, indent=4)
+        print(text)
+
+    def _send_mutation_request(self) -> None:
+        if len(self._variables) == 0:
+            return
+        args_str = """mutation("""
+        data_str = ""
+
+        # Loop through all the items in the dictionary
+        entry_counter = int(len(self._variables) / 2)
+        for i in range(entry_counter):
+            id_str = f"id_{i}"
+            score_str = f"score_{i}"
+            entry_str = f"entry_{i}"
+
+            # Add new variables as arguments of the query
+            args_str += f"\n${id_str}: Int,\n${score_str}: Float,"
+
+            # Use aliases to add a new media entry to the request
+            data_str += f"\n{entry_str}: SaveMediaListEntry(mediaId: ${id_str}, score: ${score_str}) " + "{score}"
+        # Add ") {" after args_str is done (and also remove extra comma)
+        args_str = args_str[:-1]
+        args_str += ") {\n" 
+        # Avengers assemble the full request
+        query = f"{args_str}{data_str}" + "}" 
+
+        # Header is used to make authenticated requests
+        header = {
+            'Authorization': f'Bearer ' + str(self._token)
+        }
+        response = requests.post(graphql_url, json={'query': query, 'variables': self._variables}, headers=header)
+        self._status_code = response.status_code
+        # Reset dictionary
+        self._variables = {}
 
 class WeightsWindow():
 
