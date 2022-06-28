@@ -102,8 +102,8 @@ class LoginWindow():
 
     def setup(self) -> None:
         self._create_user_input_gui()
-        self._create_description_box()
         self._create_button()
+        self._create_info_button()
 
     def run(self) -> None:
         self._login_window.mainloop()
@@ -178,10 +178,15 @@ class LoginWindow():
 
     def _create_button(self) -> None:
         token_button = ttk.Button(self._login_window,
-                                  text="OK",
-                                  command=self._login_button_callback)
-        token_button.grid(row=1, column=1, padx=5, pady=5)
-
+                                  text = "OK",
+                                  command = self._login_button_callback)
+        token_button.grid(row = 1, column = 1, padx = 5, pady = 5)
+    
+    def _create_info_button(self) -> None:
+        info_button = ttk.Button(self._login_window,
+                                 text = "Info",
+                                 command = self._create_description_box)
+        info_button.grid(row = 1, column = 0, pady = 5)
 
 graphql_url = 'https://graphql.anilist.co'
 

@@ -42,3 +42,6 @@ please close and reopen the program before trying to update your weighted scores
 For those who want to build the application itself, ```cd``` into the project's file directory and type this into Command Prompt:
 
 ```python3 -m PyInstaller --onefile --windowed advanced_scores.py```
+
+*Note: You must move the ```exe``` into the main directory where the ```.py``` script is. 
+*This is so then the program can access the assets.*
