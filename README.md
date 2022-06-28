@@ -43,5 +43,4 @@ For those who want to build the application itself, ```cd``` into the project's 
 
 ```python3 -m PyInstaller --onefile --windowed advanced_scores.py```
 
-*Note: You must move the ```exe``` into the main directory where the ```.py``` script is. 
-*This is so then the program can access the assets.*
+*Note: You must move the ```exe``` into the main directory where the ```.py``` script is. This is so then the program can access the assets.*
